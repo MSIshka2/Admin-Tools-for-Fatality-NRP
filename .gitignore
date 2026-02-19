@@ -15,3 +15,7 @@ config/UltraFuck/kolokol.mp3
 config/UltraFuck/Settings.ini
 config/UltraFuck/Scripts/money_separator.lua
 config/FtAdminTools.ini
+AutoReboot.lua
+check-moonloader-updates.lua
+reload_all.lua
+SF Integration.lua

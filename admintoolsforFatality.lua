@@ -3284,21 +3284,6 @@ function bringVec4To(from, dest, start_time, duration)
     return (timer > duration) and dest or from, false
 end
 
-function onReceiveRpc(id, bs)
-    if id == 15 then
-        ACM(utext("[A-DEBUG] TogglePlayerControllable"), "{ffffff}")
-    elseif id == 68 then
-       ACM(utext("[A-DEBUG] SetSpawnInfo"), "{ffffff}")
-    elseif id == 124 then
-        ACM(utext("[A-DEBUG] TogglePlayerSpectating "), "{ffffff}")
-    elseif id == 128 then
-        ACM(utext("[A-DEBUG] RequestClass"), "{ffffff}")
-    elseif id == 129 then
-        ACM(utext("[A-DEBUG] RequestSpawn"), "{ffffff}")
-    end
-    print(id)
-end
-
 function getVelocity(x, y, z, x1, y1, z1, flyspeed)
     local x2, y2, z2 = x1 - x, y1 - y, z1 - z
     local dist = math.sqrt((x1 - x) ^ 2 + (y1 - y) ^ 2 + (z1 - z) ^ 2)
