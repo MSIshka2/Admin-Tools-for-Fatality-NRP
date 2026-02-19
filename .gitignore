@@ -1,1 +1,17 @@
 lib/
+cef.lua
+chat.lua
+inventory.lua
+moonloader.log
+moonloader.zip
+RPC MANAGER.lua
+UltraFuck.luac
+config/HUD.ini
+config/SettingsCEF-CHAT.ini
+config/XXX.ini
+config/UltraFuck/fa-solid-900.ttf
+config/UltraFuck/fAwesome5.lua
+config/UltraFuck/kolokol.mp3
+config/UltraFuck/Settings.ini
+config/UltraFuck/Scripts/money_separator.lua
+config/FtAdminTools.ini
