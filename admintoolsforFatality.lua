@@ -74,6 +74,7 @@ local viktorinaAdminTools = new.bool()
 local voprosAdminTools = new.bool()
 local tpmenuAdminTools = new.bool()
 local addtpAdminTools = new.bool()
+local reportAdminTools = new.bool()
 
 
 local tab = 5
@@ -480,6 +481,7 @@ local sizebutton = nil
 local aclFound = false
 local teleports = {}
 local teleportsFilePath = "teleports.json"
+local reportid, reportnick, reporttext, reportsuccess = "", "", "", false
 
 local dialogcolor = false
 local dialogname = false
@@ -1900,6 +1902,53 @@ imgui.OnFrame(function() return addtpAdminTools[0] end, function(player)
     imgui.End()
 end)
 
+
+imgui.OnFrame(function() return reportAdminTools[0] end, function(player)
+    imgui.SetNextWindowSize(imgui.ImVec2(500, 500), imgui.Cond.FirstUseEver)
+    imgui.SetNextWindowPos(imgui.ImVec2(sizeX / 2, sizeY / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
+    imgui.Begin("Report", reportAdminTools, imgui.WindowFlags.NoScrollbar)
+    imgui.TextColoredRGB("{63cb00}" .. reportnick .. "[" .. reportid .. "]: " .. reporttext)
+    imgui.Spacing()
+    imgui.Text("Базовые ответы")
+    imgui.Separator()
+    imgui.Spacing()
+    if imgui.Button("Приятной игры") then
+        sampSendChat("/pm " .. reportid .. utext(" Приятной игры на Fatality NRP! <3"))
+    end
+    imgui.SameLine()
+    if imgui.Button("Слежу") then
+        sampSendChat("/pm " .. reportid .. utext(" Слежу за игроком которого вы указали!"))
+    end
+    imgui.SameLine()
+    if imgui.Button("Передать") then
+        sampSendChat("/pm " .. reportid .. utext(" Передам другому администратору! Приятной игры на Fatality NRP! <3"))
+    end
+    imgui.SameLine()
+    if imgui.Button("ХЗ") then
+        sampSendChat("/pm " .. reportid .. utext(" Я не знаю ответа на ваш вопрос. Передам другому администратору!"))
+    end
+    imgui.SameLine()
+    if imgui.Button("Помочь вручную") then
+        sampSendChat("/pm " .. reportid .. utext(" Сейчас попробую вам помочь!"))
+    end
+    imgui.Spacing()
+    imgui.Text("Быстрые ответы")
+    imgui.Separator()
+    imgui.Spacing()
+    if imgui.Button("Казино /gps") then
+        sampSendChat("/pm " .. reportid .. utext(" /gps -> 3. Бизнесы -> Казино 'Лос-Сантос'"))
+    end
+    imgui.SameLine()
+    if imgui.Button("Дома /gps") then
+        sampSendChat("/pm " .. reportid .. utext(" /gps -> 11. Найти ближайший свободный дом'"))
+    end
+    imgui.SameLine()
+    if imgui.Button("Купить ADM") then
+        sampSendChat("/pm " .. reportid .. utext(" /buyadm или обратиться к Denis_Angelov'"))
+    end
+    imgui.End()
+end)
+
 imgui.OnFrame(function() return tpmenuAdminTools[0] end, function(player)
     imgui.SetNextWindowSize(imgui.ImVec2(700,0), imgui.Cond.FirstUseEver)
     imgui.SetNextWindowPos(imgui.ImVec2(sizeX/2.8,sizeY/2))
@@ -2336,6 +2385,14 @@ local newrecontools = imgui.OnFrame(
 function sampev.onServerMessage(color, text)
     local myID = select(2, sampGetPlayerIdByCharHandle(PLAYER_PED))
     local myNick = sampGetPlayerNickname(myID)
+
+    --#63cb00 #ffcd00
+
+    if text:find(utext("(.+)%[(%d+)%]%s*%:%s*(.+)")) and color == 1674248447 then
+        reportsuccess = true
+        reportnick, reportid, reporttext = text:match(utext("(.+)%[(%d+)%]%s*%:%s*(.+)"))
+        return ACM(utext(text .. " {63cb00}| Чтобы ответить на репорт нажмите U"), "{63cb00}")
+    end
 
     if text:find(utext("Вы находитесь в интерьере (%d+)")) then
         aint = text:match(utext("Вы находитесь в интерьере (%d+)"))
@@ -3783,6 +3840,11 @@ function main()
         
         if isKeyJustPressed(VK_M) and rInfo.state == true then
             sampSendChat('/re')
+        end
+
+        if isKeyJustPressed(VK_U) then
+            reportAdminTools[0] = not reportAdminTools[0]
+            reportsuccess = false
         end
 
         if rInfo.state == true and wasKeyPressed(VK_SPACE) and not sampIsChatInputActive() and not sampIsDialogActive() then
