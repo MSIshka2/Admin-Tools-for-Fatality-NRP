@@ -1940,11 +1940,15 @@ imgui.OnFrame(function() return reportAdminTools[0] end, function(player)
     end
     imgui.SameLine()
     if imgui.Button("Дома /gps") then
-        sampSendChat("/pm " .. reportid .. utext(" /gps -> 11. Найти ближайший свободный дом'"))
+        sampSendChat("/pm " .. reportid .. utext(" /gps -> 11. Найти ближайший свободный дом"))
     end
     imgui.SameLine()
     if imgui.Button("Купить ADM") then
-        sampSendChat("/pm " .. reportid .. utext(" /buyadm или обратиться к Denis_Angelov'"))
+        sampSendChat("/pm " .. reportid .. utext(" /buyadm или обратиться к Denis_Angelov"))
+    end
+    imgui.SameLine()
+    if imgui.Button("Уже админ") then
+        sampSendChat("/pm " .. reportid .. utext(" Вы уже администратор, введите /ahelp. Приятной игры на Fatality NRP!"))
     end
     imgui.End()
 end)
