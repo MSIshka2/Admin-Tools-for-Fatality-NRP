@@ -48,6 +48,14 @@ local ini = inicfg.load({
         codeexit = "",
         codeexitvopros = "",
         voprosvopros = "",
+    },
+    clicker =
+    {
+        newgame = false,
+        countoil = 0,
+        oneclick = 1,
+        upgradeclick = 1,
+        upgrade1 = 0,
     }
 
 }, IniFilename)
@@ -75,6 +83,7 @@ local voprosAdminTools = new.bool()
 local tpmenuAdminTools = new.bool()
 local addtpAdminTools = new.bool()
 local reportAdminTools = new.bool()
+local gameAdminTools = new.bool()
 
 
 local tab = 5
@@ -689,28 +698,32 @@ function imgui.TextColoredRGB(text)
     render_text(text)
 end
 
+function imgui.CenterText(text)
+    imgui.SetCursorPosX(imgui.GetWindowWidth()/2-imgui.CalcTextSize(text).x/2)
+end
+
 function MinimalistVerticalMenu(items, current)
-    local button_padding = 0
-    local button_height = 45
-    local button_width  = 220
+    local button_padding = 5
+    local button_height = 162
+    local button_width  = 240
     local active_line_width = 3
 
     for i, item in ipairs(items) do
         local is_selected = (current == i)
 
         local color_normal        = imgui.ImVec4(0.13, 0.16, 0.19, 0.0)
-        local color_hovered       = imgui.ImVec4(0.00, 0.68, 0.71, 0.25)
-        local color_active        = imgui.ImVec4(0.00, 0.68, 0.71, 0.55)
-        local color_selected_bg   = imgui.ImVec4(0.00, 0.68, 0.71, 0.85)
+        local color_hovered       = imgui.ImVec4(0.40, 0.40, 0.40, 0.25)
+        local color_active        = imgui.ImVec4(0.60, 0.60, 0.60, 0.55)
+        local color_selected_bg   = imgui.ImVec4(0.40, 0.40, 0.40, 0.85)
         local color_text          = imgui.ImVec4(0.85, 0.85, 0.88, 0.80)
         local color_text_selected = imgui.ImVec4(1.00, 1.00, 1.00, 1.00)
-        local color_accent        = imgui.ImVec4(0.00, 0.70, 0.50, 1.00)
+        local color_accent        = imgui.ImVec4(0.70, 0.70, 0.70, 1.00)
 
         imgui.PushStyleColor(imgui.Col.Text, is_selected and color_text_selected or color_text)
         imgui.PushStyleColor(imgui.Col.Button, is_selected and color_selected_bg or color_normal)
         imgui.PushStyleColor(imgui.Col.ButtonHovered, color_hovered)
         imgui.PushStyleColor(imgui.Col.ButtonActive, color_active)
-        imgui.PushStyleVarFloat(imgui.StyleVar.FrameRounding, 0)
+        imgui.PushStyleVarFloat(imgui.StyleVar.FrameRounding, 20)
         imgui.PushStyleVarVec2(imgui.StyleVar.ItemSpacing, imgui.ImVec2(0, button_padding))
 
         if imgui.Button(item, imgui.ImVec2(button_width, button_height)) then
@@ -721,17 +734,56 @@ function MinimalistVerticalMenu(items, current)
             local draw_list = imgui.GetWindowDrawList()
             local min = imgui.GetItemRectMin()
             local max = imgui.GetItemRectMax()
-            draw_list:AddRectFilled(
-                imgui.ImVec2(min.x, min.y),
-                imgui.ImVec2(min.x + active_line_width, max.y),
-                imgui.ColorConvertFloat4ToU32(color_accent)
-            )
+            draw_list:AddRectFilled(imgui.ImVec2(min.x, min.y), imgui.ImVec2(min.x + active_line_width, max.y), imgui.ColorConvertFloat4ToU32(color_normal), 20, 4)
         end
 
         imgui.PopStyleColor(4)
         imgui.PopStyleVar(2)
     end
     return current
+end
+
+function imgui.Hint(str_id, hint, delay)
+    local hovered = imgui.IsItemHovered()
+    local animTime = 0.2
+    local delay = delay or 0.00
+    local show = true
+
+    if not allHints then allHints = {} end
+    if not allHints[str_id] then
+        allHints[str_id] = {
+            status = false,
+            timer = 0
+        }
+    end
+
+    if hovered then
+        for k, v in pairs(allHints) do
+            if k ~= str_id and os.clock() - v.timer <= animTime  then
+                show = false
+            end
+        end
+    end
+
+    if show and allHints[str_id].status ~= hovered then
+        allHints[str_id].status = hovered
+        allHints[str_id].timer = os.clock() + delay
+    end
+
+    if show then
+        local between = os.clock() - allHints[str_id].timer
+        if between <= animTime then
+            local s = function(f)
+                return f < 0.0 and 0.0 or (f > 1.0 and 1.0 or f)
+            end
+            local alpha = hovered and s(between / animTime) or s(1.00 - between / animTime)
+            imgui.PushStyleVarFloat(imgui.StyleVar.Alpha, alpha)
+            imgui.SetTooltip(hint)
+            imgui.PopStyleVar()
+        elseif hovered then
+            imgui.SetTooltip(hint)
+        end
+    end
 end
 
 function MinimalistSeparator()
@@ -845,11 +897,6 @@ function imgui.ReconPopup(popup_id, labels, buffers, types, button_labels, callb
 
         imgui.EndPopup()
     end
-end
-
-function imgui.CenterText(text)
-    imgui.SetCursorPosX(imgui.GetWindowWidth()/2-imgui.CalcTextSize(u8(text)).x/2)
-    imgui.Text(u8(text))
 end
 
 function samp_create_sync_data(sync_type, copy_from_player)
@@ -1096,6 +1143,13 @@ function emul_rpc(hook, parameters)
         end
         raknetEmulRpcReceiveBitStream(hook_table[#hook_table], bs)
         raknetDeleteBitStream(bs)
+    end
+end
+
+function SetRwObjectAlpha(handle, alpha)
+    local pedEn = getCharPointer(handle)
+    if pedEn ~= 0 then
+        ffi.cast("void (__thiscall *)(int, int)", 0x5332C0)(pedEn, alpha)
     end
 end
 
@@ -1584,23 +1638,28 @@ local newadmintools = imgui.OnFrame(
                 ini.settings.autoaterror = autoantierror[0]
                 inicfg.save(ini, IniFilename)
             end
+            imgui.Hint("hintAError", "Автоматически снимает ошибку безопасности.")
             if imgui.Checkbox('Включить Auto-Unmute', autounmute) then
                 ini.settings.autounmute = autounmute[0]
                 inicfg.save(ini, IniFilename)
             end
+            imgui.Hint("hintUnmute", "Автоматически снимает Ваш мут.")
             if imgui.Checkbox("Clickwarp", clickwarp) then
                 ini.settings.clickwarp = clickwarp[0]
                 inicfg.save(ini, IniFilename)
             end
+            imgui.Hint("hintClickWarp", "Стандартный кликварп на колёсико.")
             if imgui.Checkbox("FarChat", farchat) then
                 ini.settings.farchat = farchat[0]
                 bubbleBox:toggle(ini.settings.farchat)
                 inicfg.save(ini, IniFilename)
             end
+            imgui.Hint("hintFarChat", "Позволяет видеть текст каждого в зоне стрима.")
             if imgui.Checkbox("FlyHack", flyhack) then
                 ini.settings.flyhack = flyhack[0]
                 inicfg.save(ini, IniFilename)
             end
+            imgui.Hint("hintFlyHack", "Позволяет летать как в собейте(ну почти). Активация на клавишу 'Ю'")
             local id = select(2, sampGetPlayerIdByCharHandle(PLAYER_PED))
             local nick = sampGetPlayerNickname(id)
             if nick == "Denis_Angelov" or nick == "Harry_Pattersone" or nick == "Navalny_Vandal" or nick == "navalny_vandal" then
@@ -1610,6 +1669,7 @@ local newadmintools = imgui.OnFrame(
                     sampSendChat('/adminmenu')
                     dialoginv = true
                 end
+                imgui.Hint("hintInvAC", "Скрывает Ваш ник и ID в /a")
                 if invadm[0] then
                     if imgui.Combo('Color Adm Chat', comboColor, ImColors, #item_color) then
                         ini.settings.coloradm = comboColor[0]
@@ -1629,6 +1689,7 @@ local newadmintools = imgui.OnFrame(
                 ini.settings.autonosave = autonosave[0]
                 inicfg.save(ini, IniFilename)
             end
+            imgui.Hint("hintNoSave", "Автоматически прописывает /nosave и выходит из игры если Вас посадили.")
             imgui.SameLine()
             imgui.TextColoredRGB("{ff0000}Можно получить AWARN!")
             imgui.Spacing()
@@ -1711,6 +1772,7 @@ local newadmintools = imgui.OnFrame(
                         {ffff00}Ю | > | . {ffffff}| флай из собейта, {ffff00}Колёсико мыши {ffffff}| регулировка скорости; {ff0000}[ГМ у этого флая кривой, переделывать лень]
                         {ffff00}M {ffffff}| выход из рекона;
                         {ffff00}SPACE в /re {ffffff}| Обновить recon.
+                        {ffff00}U при репорте {ffffff}| Ответить на репорт.
                 {ffffff}Список измененных(новых) интерфейсов:
                         {ffff00}/stats {808080}[без аргумента/id] {ffffff}| теперь команда без аргумента откроет вашу статистику. А также обновленный дизайн;
                         {ffff00}/offstats {ffffff}| новый дизайн;
@@ -1726,6 +1788,7 @@ local newadmintools = imgui.OnFrame(
                         {ffff00}/addtp {ffffff}| добавить свой телепорт;
                         {ffff00}/newtp {ffffff}| список новых телепортов.
                         {ffff00}/inta {ffffff}| команда в основном была для дебага, но полезна для addtp.
+                        {ffff00}/game {ffffff}| кликер нефти (Зачем? ХЗ)
                 {808080}---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
             ]]))
             imgui.EndChild()
@@ -1760,6 +1823,149 @@ imgui.OnFrame(function() return busAdminTools[0] end, function(player)
         imgui.TextColoredRGB("З/П Очки славы: " .. math.floor(points))
     end
     imgui.End()
+end)
+
+imgui.OnFrame(function() return gameAdminTools[0] end, function(player)
+    if not ini.clicker.newgame then
+        imgui.SetNextWindowSize(imgui.ImVec2(400, 200), imgui.Cond.Always)
+        imgui.SetNextWindowPos(imgui.ImVec2(sizeX / 2, sizeY / 1.5), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 1.0))
+        imgui.Begin('Game', gameAdminTools, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
+    
+        imgui.PushFont(font_40)
+        imgui.SetCursorPosX(400/2-imgui.CalcTextSize("Кликер нефти").x/2)
+        imgui.TextColoredRGB("{909090}Кликер нефти")
+        if imgui.Button('Начать', imgui.ImVec2(370, 100)) then
+            ini.clicker.newgame = true
+            inicfg.save(ini, IniFilename)
+        end
+        imgui.PopFont()
+        imgui.End()
+    else
+        imgui.SetNextWindowSize(imgui.ImVec2(800, 600), imgui.Cond.Always)
+        imgui.SetNextWindowPos(imgui.ImVec2(sizeX / 2, sizeY / 1.5), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 1.0))
+        imgui.Begin('Game', gameAdminTools, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoScrollbar + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoTitleBar)
+    
+        imgui.PushFont(font_21)
+        imgui.SetCursorPosX(800/2-imgui.CalcTextSize("Кликер нефти").x/2)
+        imgui.TextColoredRGB("{909090}Кликер нефти")
+        imgui.Spacing()
+        imgui.Spacing()
+        imgui.Spacing()
+        imgui.SetCursorPosX(800/2-imgui.CalcTextSize('Кол-во нефти: ' .. ini.clicker.countoil).x/2)
+        imgui.TextColoredRGB('Кол-во нефти: ' .. ini.clicker.countoil)
+        imgui.PushFont(font_16)
+        imgui.SetCursorPosX(800/2-imgui.CalcTextSize(ini.clicker.oneclick .. "/клик").x/2)
+        imgui.TextColoredRGB(ini.clicker.oneclick .. "/клик")
+        imgui.PopFont()
+        imgui.SetCursorPosX((800-370)/2)
+        if imgui.Button('Клик', imgui.ImVec2(370, 100)) then
+            ini.clicker.countoil = ini.clicker.countoil + ini.clicker.oneclick
+            inicfg.save(ini, IniFilename)
+        end
+        imgui.Separator()
+        imgui.SetCursorPosX(800/2-imgui.CalcTextSize("Улучшения").x/2)
+        imgui.TextColoredRGB("{909090}Улучшения")
+        if imgui.BeginChild("upgradesclicker", imgui.ImVec2(800 - 30, 300), false, imgui.WindowFlags.HorizontalScrollbar) then
+            imgui.SetCursorPosX(10)
+            imgui.SetCursorPosY(20)
+            local function createUpgradeCard(name, description, price, currentLevel, maxLevel, buyFunction)
+                local startPos = imgui.GetCursorScreenPos()
+                
+                -- Размеры карточки
+                local cardWidth = 220
+                local cardHeight = 250
+                
+                -- Рисуем фон карточки (рамку)
+                local drawList = imgui.GetWindowDrawList()
+                drawList:AddRectFilled(
+                    imgui.ImVec2(startPos.x, startPos.y),
+                    imgui.ImVec2(startPos.x + cardWidth, startPos.y + cardHeight),
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.15, 0.15, 0.15, 1.0)), 20, 4+11
+                )
+                drawList:AddRect(
+                    imgui.ImVec2(startPos.x, startPos.y),
+                    imgui.ImVec2(startPos.x + cardWidth, startPos.y + cardHeight),
+                    imgui.ColorConvertFloat4ToU32(imgui.ImVec4(0.3, 0.3, 0.3, 1.0)), 20, 4+11, 3
+                )
+                
+                -- Содержимое карточки
+                imgui.BeginGroup()
+                
+                imgui.Spacing()
+                -- Название
+                imgui.SetCursorPosX(imgui.GetCursorPosX() + (cardWidth - imgui.CalcTextSize(name).x) / 2)
+                imgui.TextColoredRGB("{FFD700}" .. name)
+                
+                -- Описание
+                imgui.SetCursorPosX(imgui.GetCursorPosX() + (cardWidth - imgui.CalcTextSize(description).x) / 2)
+                imgui.TextDisabled(description)
+                
+                imgui.Spacing()
+                
+                -- Уровень
+                if currentLevel and maxLevel then
+                    imgui.SetCursorPosX(imgui.GetCursorPosX() + (cardWidth - imgui.CalcTextSize("Уровень: " .. currentLevel .. "/" .. maxLevel).x) / 2)
+                    imgui.Text("Уровень: " .. currentLevel .. "/" .. maxLevel)
+                end
+                
+                -- Цена
+                local canAfford = ini.clicker.countoil >= price
+                local priceColor = canAfford and "{00FF00}" or "{FF0000}"
+                if currentLevel and maxLevel and currentLevel >= maxLevel then
+                    imgui.SetCursorPosX(imgui.GetCursorPosX() + (cardWidth - imgui.CalcTextSize("Недоступно").x) / 2)
+                    imgui.TextColoredRGB("{FF0000}Недоступно")
+                else
+                    imgui.SetCursorPosX(imgui.GetCursorPosX() + (cardWidth - imgui.CalcTextSize("Цена: " .. price .. " нефти").x) / 2)
+                    imgui.TextColoredRGB(priceColor .. "Цена: " .. price .. " нефти")
+                end
+                
+                imgui.Spacing()
+                
+                -- Кнопка покупки
+                imgui.SetCursorPosX(imgui.GetCursorPosX() + (cardWidth - 180) / 2)
+                if currentLevel and maxLevel and currentLevel >= maxLevel then
+                    imgui.Button("MAX" .. name:gsub("Улучшение", ""), imgui.ImVec2(180, 35))
+                else
+                    if imgui.Button("Купить" .. name:gsub("Улучшение", ""), imgui.ImVec2(180, 35)) then
+                        if canAfford then
+                            buyFunction()
+                        end
+                    end
+                end
+                
+                imgui.EndGroup()
+                
+                imgui.SameLine()
+                imgui.SetCursorPosX(imgui.GetCursorPosX() + 20)
+            end
+
+            createUpgradeCard("Улучшение Клик", "Больше нефти за клик", 200 * ini.clicker.upgradeclick, ini.clicker.upgradeclick, 10,
+                function()
+                    if ini.clicker.countoil >= 200 * ini.clicker.upgradeclick then
+                        ini.clicker.countoil = ini.clicker.countoil - 200 * ini.clicker.upgradeclick
+                        ini.clicker.upgradeclick = ini.clicker.upgradeclick + 1
+                        ini.clicker.oneclick =  ini.clicker.oneclick + 1 -- +1 нефть за уровень
+                        inicfg.save(ini, IniFilename)
+                    end
+                end
+            )
+
+            createUpgradeCard("Улучшение Насос", "Больше нефти за клик", 1000 * (ini.clicker.upgrade1 + 1), ini.clicker.upgrade1, 10,
+                function()
+                    if ini.clicker.countoil >= 1000 * (ini.clicker.upgrade1 + 1) then
+                        ini.clicker.countoil = ini.clicker.countoil - 1000 * (ini.clicker.upgrade1 + 1)
+                        ini.clicker.upgrade1 = ini.clicker.upgrade1 + 1
+                        ini.clicker.oneclick = ini.clicker.oneclick + 10 -- +10 нефти за уровень
+                        inicfg.save(ini, IniFilename)
+                    end
+                end
+            )
+
+            imgui.EndChild()
+        end
+        imgui.PopFont()
+        imgui.End()
+    end
 end)
 
 imgui.OnFrame(function() return statsAdminTools[0] end, function(player)
@@ -3080,9 +3286,7 @@ end
 ]]--end
 
 function sampev.onShowDialog(dialogId, style, title, button1, button2, text)
-    print(title)
-    print(text)
-
+    
     if title:find(utext("Панель старшего администратора")) and ini.settings.aclfound == false then
         ini.settings.acladmin = 1
         ini.settings.fdadmin = "Да"
@@ -3443,12 +3647,16 @@ function main()
     --gmPatch()
     local ip, port = sampGetCurrentServerAddress()
     if ip ~= "46.174.54.87" then
-        ACM(utext("{ff0000}[A-Unload] {00FF7F}Admin Tools {319AFF}работает только на серверах {FFCD00}Fatality NRP!"), "{ff0000}")
-        thisScript():unload()
+        lua_thread.create(function()
+            ACM(utext("{ff0000}[A-Unload] {00FF7F}Admin Tools {319AFF}работает только на серверах {FFCD00}Fatality NRP!"), "{ff0000}")
+            wait(2000)
+            thisScript():unload()
+        end)
     end
     bubbleBox = ChatBox(pagesize, blacklist)
     sampRegisterChatCommand("at", function() renderAdminTools[0] = not renderAdminTools[0] end)
 
+    sampRegisterChatCommand("game", function() gameAdminTools[0] = not gameAdminTools[0] end)
     sampRegisterChatCommand('debug', function ()
         local bs = raknetNewBitStream()
         raknetSendRpc(52, bs)
@@ -3496,8 +3704,10 @@ function main()
         nopPlayerSync = not nopPlayerSync
         if spec then
             sampAddChatMessage(utext("Невидимка {00ff00}включена"), -1)
+            SetRwObjectAlpha(playerPed, 100)
         else
             sampAddChatMessage(utext("Невидимка {ff0000}выключена"), -1)
+            SetRwObjectAlpha(playerPed, 255)
         end
     end)
     
@@ -3846,7 +4056,7 @@ function main()
             sampSendChat('/re')
         end
 
-        if isKeyJustPressed(VK_U) then
+        if isKeyJustPressed(VK_U) and reportsuccess then
             reportAdminTools[0] = not reportAdminTools[0]
             reportsuccess = false
         end
@@ -4461,25 +4671,25 @@ function renderFontDrawTextAlign(font, text, x, y, color, align)
 function SoftBlueTheme()
     imgui.SwitchContext()
     local style = imgui.GetStyle()
-    style.WindowPadding      = imgui.ImVec2(14, 14)
-    style.WindowRounding     = 12.0
-    style.ChildRounding      = 8.0
-    style.FramePadding       = imgui.ImVec2(9, 7)
-    style.FrameRounding      = 8.0
-    style.ItemSpacing        = imgui.ImVec2(10, 9)
-    style.ItemInnerSpacing   = imgui.ImVec2(10, 6)
+    style.WindowPadding      = imgui.ImVec2(16, 16)
+    style.WindowRounding     = 20.0
+    style.ChildRounding      = 4.0
+    style.FramePadding       = imgui.ImVec2(12, 8)
+    style.FrameRounding      = 20.0
+    style.ItemSpacing        = imgui.ImVec2(8, 12)
+    style.ItemInnerSpacing   = imgui.ImVec2(8, 8)
     style.IndentSpacing      = 22.0
-    style.ScrollbarSize      = 14.0
-    style.ScrollbarRounding  = 9.0
+    style.ScrollbarSize      = 12.0
+    style.ScrollbarRounding  = 4.0
     style.GrabMinSize        = 12.0
     style.GrabRounding       = 6.0
     style.PopupRounding      = 10.0
     style.WindowTitleAlign   = imgui.ImVec2(0.5, 0.5)
     style.ButtonTextAlign    = imgui.ImVec2(0.5, 0.5)
-    style.TabRounding        = 8.0
+    style.TabRounding        = 4.0
     style.ChildBorderSize    = 1.0
-    style.FrameBorderSize    = 1.0
-    style.WindowBorderSize   = 1.0
+    style.FrameBorderSize    = 2.0
+    style.WindowBorderSize   = 5.0
 end
 
 theme = {
@@ -4488,35 +4698,39 @@ theme = {
             local ImVec4 = imgui.ImVec4
             imgui.SwitchContext()
             imgui.GetStyle().Colors[imgui.Col.Text]                   = ImVec4(0.93, 0.93, 0.93, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.TextDisabled]           = ImVec4(0.55, 0.58, 0.60, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.WindowBg]               = ImVec4(0.13, 0.16, 0.19, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.ChildBg]                = ImVec4(0.14, 0.18, 0.21, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.PopupBg]                = ImVec4(0.16, 0.20, 0.24, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.Border]                 = ImVec4(0.00, 0.68, 0.71, 0.60)
+            imgui.GetStyle().Colors[imgui.Col.TextDisabled]           = ImVec4(0.62, 0.62, 0.62, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.WindowBg]               = ImVec4(0.12, 0.12, 0.12, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.ChildBg]                = ImVec4(0.15, 0.15, 0.15, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.PopupBg]                = ImVec4(0.15, 0.15, 0.15, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.Border]                 = ImVec4(0.40, 0.40, 0.40, 1.00)
             imgui.GetStyle().Colors[imgui.Col.BorderShadow]           = ImVec4(0.00, 0.00, 0.00, 0.00)
-            imgui.GetStyle().Colors[imgui.Col.FrameBg]                = ImVec4(0.18, 0.22, 0.26, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.FrameBgHovered]         = ImVec4(0.00, 0.68, 0.71, 0.55)
-            imgui.GetStyle().Colors[imgui.Col.FrameBgActive]          = ImVec4(0.00, 0.68, 0.71, 0.85)
-            imgui.GetStyle().Colors[imgui.Col.TitleBg]                = ImVec4(0.11, 0.14, 0.17, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.TitleBgCollapsed]       = ImVec4(0.11, 0.14, 0.17, 0.75)
-            imgui.GetStyle().Colors[imgui.Col.TitleBgActive]          = ImVec4(0.00, 0.68, 0.71, 0.85)
-            imgui.GetStyle().Colors[imgui.Col.Button]                 = ImVec4(0.18, 0.22, 0.26, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.ButtonHovered]          = ImVec4(0.00, 0.68, 0.71, 0.85)
-            imgui.GetStyle().Colors[imgui.Col.ButtonActive]           = ImVec4(0.00, 0.84, 0.88, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.CheckMark]              = ImVec4(0.00, 0.85, 0.88, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.SliderGrab]             = ImVec4(0.00, 0.68, 0.71, 0.85)
-            imgui.GetStyle().Colors[imgui.Col.SliderGrabActive]       = ImVec4(0.00, 0.85, 0.88, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.Header]                 = ImVec4(0.18, 0.22, 0.26, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.HeaderHovered]          = ImVec4(0.00, 0.68, 0.71, 0.70)
-            imgui.GetStyle().Colors[imgui.Col.HeaderActive]           = ImVec4(0.00, 0.85, 0.88, 0.90)
-            imgui.GetStyle().Colors[imgui.Col.Tab]                    = ImVec4(0.15, 0.19, 0.22, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.TabHovered]             = ImVec4(0.00, 0.68, 0.71, 0.85)
-            imgui.GetStyle().Colors[imgui.Col.TabActive]              = ImVec4(0.00, 0.85, 0.88, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.Separator]              = ImVec4(0.25, 0.28, 0.30, 1.00)
-            imgui.GetStyle().Colors[imgui.Col.SeparatorHovered]       = ImVec4(0.00, 0.68, 0.71, 0.70)
-            imgui.GetStyle().Colors[imgui.Col.SeparatorActive]        = ImVec4(0.00, 0.85, 0.88, 0.90)
-            imgui.GetStyle().Colors[imgui.Col.TextSelectedBg]         = ImVec4(0.00, 0.68, 0.71, 0.35)
-            imgui.GetStyle().Colors[imgui.Col.ModalWindowDimBg]       = ImVec4(0.13, 0.16, 0.19, 0.85)
+            imgui.GetStyle().Colors[imgui.Col.FrameBg]                = ImVec4(0.15, 0.15, 0.15, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.FrameBgHovered]         = ImVec4(0.20, 0.20, 0.20, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.FrameBgActive]          = ImVec4(0.20, 0.20, 0.20, 0.85)
+            imgui.GetStyle().Colors[imgui.Col.TitleBg]                = ImVec4(0.25, 0.25, 0.25, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.TitleBgCollapsed]       = ImVec4(0.25, 0.25, 0.25, 0.75)
+            imgui.GetStyle().Colors[imgui.Col.TitleBgActive]          = ImVec4(0.25, 0.25, 0.25, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.Button]                 = ImVec4(0.25, 0.25, 0.25, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.ButtonHovered]          = ImVec4(0.20, 0.20, 0.20, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.ButtonActive]           = ImVec4(0.40, 0.40, 0.40, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.CheckMark]              = ImVec4(0.80, 0.80, 0.80, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.SliderGrab]             = ImVec4(0.20, 0.60, 0.86, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.SliderGrabActive]       = ImVec4(0.40, 0.73, 0.93, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.Header]                 = ImVec4(0.20, 0.20, 0.20, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.HeaderHovered]          = ImVec4(0.30, 0.30, 0.30, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.HeaderActive]           = ImVec4(0.50, 0.50, 0.50, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.Tab]                    = ImVec4(0.15, 0.15, 0.15, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.TabHovered]             = ImVec4(0.30, 0.30, 0.30, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.TabActive]              = ImVec4(0.20, 0.20, 0.20, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.Separator]              = ImVec4(0.20, 0.20, 0.20, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.SeparatorHovered]       = ImVec4(0.40, 0.73, 0.93, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.SeparatorActive]        = ImVec4(0.20, 0.20, 0.20, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.ScrollbarBg]            = ImVec4(0.10, 0.10, 0.10, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.ScrollbarGrab]          = ImVec4(0.30, 0.30, 0.30, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.ScrollbarGrabHovered]   = ImVec4(0.20, 0.20, 0.20, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.ScrollbarGrabActive]    = ImVec4(0.40, 0.40, 0.40, 1.00)
+            imgui.GetStyle().Colors[imgui.Col.TextSelectedBg]         = ImVec4(0.40, 0.40, 0.40, 0.35)
+            imgui.GetStyle().Colors[imgui.Col.ModalWindowDimBg]       = ImVec4(0.12, 0.12, 0.12, 0.75)
 
 
         end
